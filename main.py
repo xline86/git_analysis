@@ -1,5 +1,6 @@
 import os
 import json
+from datetime import timezone, timedelta
 from pydriller import Repository
 from pathspec import PathSpec
 
@@ -14,6 +15,9 @@ LANGUAGE_MAP = {
     ".md": "Markdown",
     ".json": "JSON",
 }
+
+# JST タイムゾーンを定義
+JST = timezone(timedelta(hours=9))
 
 
 def get_language_from_extension(filename):
@@ -136,10 +140,10 @@ def extract_git_history(repo_path, branch):
                 continue  # 削除されたファイルなどをスキップ
             rel_path = mod.new_path
             entry = {
-                "commit_hash": commit.hash[:8],
+                "commit_hash": commit.hash[:14],  # まず被らない桁数(フルハッシュは40桁)
                 "commit_message": commit.msg.strip(),
-                "author_date": commit.author_date.strftime("%Y-%m-%dT%H:%M:%SZ"),
-                "commit_date": commit.committer_date.strftime("%Y-%m-%dT%H:%M:%SZ"),
+                "author_date": commit.author_date.astimezone(JST).isoformat(),
+                "commit_date": commit.committer_date.astimezone(JST).isoformat(),
             }
             file_histories.setdefault(rel_path, []).append(entry)
 
@@ -206,24 +210,9 @@ def generate_git_summary_json(repo_path, branch, output_file="git_summary.json")
     print(f"JSON summary created: {output_file}")
 
 
-# ------------------------------------------------------------
-# CLI実行エントリポイント
-# ------------------------------------------------------------
 if __name__ == "__main__":
-    import argparse
+    repo_path = r"C:\Users\roa86\Documents\roa_local\workspace\git\testapp1_practice"
+    branch = "main"
+    output = r"output\project_history.json"
 
-    parser = argparse.ArgumentParser(
-        description="Generate git history summary JSON using PyDriller."
-    )
-    parser.add_argument(
-        "repo_path", help="Path to the root directory of the git project"
-    )
-    parser.add_argument(
-        "--branch", default="main", help="Target branch name (default: main)"
-    )
-    parser.add_argument(
-        "--output", default="git_summary.json", help="Output JSON file name"
-    )
-
-    args = parser.parse_args()
-    generate_git_summary_json(args.repo_path, args.branch, args.output)
+    generate_git_summary_json(repo_path, branch, output)
