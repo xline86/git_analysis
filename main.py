@@ -58,7 +58,7 @@ def is_ignored(path: Path, spec: PathSpec | None, root_path: Path) -> bool:
     if spec is None:
         return False
 
-    rel_path = str(path.relative_to(root_path))
+    rel_path = path.relative_to(root_path).as_posix()
     return spec.match_file(rel_path)
 
 
@@ -86,7 +86,7 @@ def build_project_structure(
                 {
                     "type": "directory",
                     "name": entry.name,
-                    "path": str(rel_path),
+                    "path": rel_path.as_posix(),
                     "children": children,
                 }
             )
@@ -95,7 +95,7 @@ def build_project_structure(
                 {
                     "type": "file",
                     "name": entry.name,
-                    "path": str(rel_path),
+                    "path": rel_path.as_posix(),
                 }
             )
 
@@ -112,22 +112,22 @@ def build_directories_list(
             continue
 
         rel_path = dirpath.relative_to(root_path)
-        rel_str = "" if str(rel_path) == "." else str(rel_path)
+        rel_str = "" if rel_path.as_posix() == "." else rel_path.as_posix()
 
         children: list[str] = []
         for d in dirnames:
             full_d = dirpath / d
             if not is_ignored(full_d, spec, root_path):
-                children.append(str((Path(rel_str) / d)) + "/")
+                children.append(f"{(Path(rel_str) / d).as_posix()}/")
 
         for f in filenames:
             full_f = dirpath / f
             if not is_ignored(full_f, spec, root_path):
-                children.append(str((Path(rel_str) / f)))
+                children.append((Path(rel_str) / f).as_posix())
 
         directories.append(
             {
-                "relative_path": rel_str + "/" if rel_str else "./",
+                "relative_path": f"{rel_str}/" if rel_str else "./",
                 "children": children,
             }
         )
@@ -187,7 +187,7 @@ def generate_git_summary_json(
     else:
         print("No .gitignore found — analyzing all files.")
 
-    # プロジェクトでぃの構造情報
+    # プロジェクトディレクトリの構造情報
     project_tree = {
         "root": {
             "name": root_name,
@@ -233,9 +233,9 @@ def generate_git_summary_json(
 # ------------------------------------------------------------
 if __name__ == "__main__":
     repo_path = Path(
-        r"C:\Users\roa86\Documents\roa_local\workspace\git\testapp1_practice"
+        r"C:\Users\roa86\Documents\roa_local\workspace\udemy\discode_clone\discord-clone-udemy"
     )  # プロジェクトのルートディレクトリ
-    branch = "main"  # 解析対象のgitブランチ名
+    branch = "master"  # 解析対象のgitブランチ名
     output = Path(r"output\project_history.json")  # 出力ファイル(json)
 
     generate_git_summary_json(repo_path, branch, output)
