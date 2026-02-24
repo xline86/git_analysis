@@ -49,7 +49,7 @@ python generate_git_summary.py <path_to_repo> [--branch BRANCH] [--output OUTPUT
 ### 例：
 
 ```bash
-python generate_git_summary.py ./my-nextjs-app --branch main --output project_history.json
+python main.py "C:\Users\roa86\Documents\roa_local\workspace\git\testapp1_practice" --branch main --output output\project_history.json
 ```
 
 ### 引数
