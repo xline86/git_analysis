@@ -1,10 +1,15 @@
 import os
 import json
 from datetime import timezone, timedelta
+from pathlib import Path
+from typing import Any
 from pydriller import Repository
 from pathspec import PathSpec
 
-# 拡張子 → 言語の簡易マッピング
+# ------------------------------------------------------------
+# 定数定義
+# ------------------------------------------------------------
+
 LANGUAGE_MAP = {
     ".js": "JavaScript",
     ".jsx": "JavaScript (React)",
@@ -16,105 +21,113 @@ LANGUAGE_MAP = {
     ".json": "JSON",
 }
 
-# JST タイムゾーンを定義
+# JST タイムゾーン
 JST = timezone(timedelta(hours=9))
 
 
-def get_language_from_extension(filename):
-    _, ext = os.path.splitext(filename)
-    return LANGUAGE_MAP.get(ext, None)
+# ------------------------------------------------------------
+# 言語判定
+# ------------------------------------------------------------
+def get_language_from_extension(filename: str) -> str | None:
+    return LANGUAGE_MAP.get(Path(filename).suffix, None)
 
 
 # ------------------------------------------------------------
-# .gitignore 読み込み＆判定ロジック
+# .gitignore 読み込み＆判定
 # ------------------------------------------------------------
-def load_gitignore(root_path):
+def load_gitignore(root_path: Path) -> PathSpec | None:
     """
     ルートディレクトリ直下の .gitignore を読み込み、PathSpec を返す。
     """
-    gitignore_path = os.path.join(root_path, ".gitignore")
-    if not os.path.exists(gitignore_path):
+    gitignore_path = root_path / ".gitignore"
+    if not gitignore_path.exists():
         return None
-    with open(gitignore_path, "r", encoding="utf-8") as f:
+    with gitignore_path.open("r", encoding="utf-8") as f:
         spec = PathSpec.from_lines("gitwildmatch", f)
     return spec
 
 
-def is_ignored(path, spec, root_path):
+def is_ignored(path: Path, spec: PathSpec | None, root_path: Path) -> bool:
     """
     .gitignore のルールに一致するか判定。
     常に .git ディレクトリは除外する。
     """
-    # 無条件で .git ディレクトリをスキップ
-    if ".git" in os.path.relpath(path, root_path).split(os.sep):
+    if ".git" in path.relative_to(root_path).parts:
         return True
 
     if spec is None:
         return False
 
-    rel_path = os.path.relpath(path, root_path)
+    rel_path = str(path.relative_to(root_path))
     return spec.match_file(rel_path)
 
 
 # ------------------------------------------------------------
 # プロジェクト構造の探索
 # ------------------------------------------------------------
-def build_project_structure(root_path, current_path=".", spec=None):
+def build_project_structure(
+    root_path: Path, current_path: Path = Path("."), spec: PathSpec | None = None
+) -> list[dict[str, Any]]:
     """
-    プロジェクトツリー構造を再帰的に構築。
+    プロジェクトのツリー構造を再帰的に構築。
     .gitignore で無視されているものはスキップ。
     """
-    abs_path = os.path.join(root_path, current_path)
-    items = []
+    abs_path = root_path / current_path
+    items: list[dict[str, Any]] = []
 
-    for entry in sorted(os.listdir(abs_path)):
-        full_path = os.path.join(abs_path, entry)
-        if is_ignored(full_path, spec, root_path):
-            continue  # 無視対象をスキップ
+    for entry in sorted(abs_path.iterdir()):
+        if is_ignored(entry, spec, root_path):
+            continue
 
-        rel_path = os.path.relpath(full_path, root_path)
-        if os.path.isdir(full_path):
+        rel_path = entry.relative_to(root_path)
+        if entry.is_dir():
             children = build_project_structure(root_path, rel_path, spec)
             items.append(
                 {
                     "type": "directory",
-                    "name": entry,
-                    "path": rel_path,
+                    "name": entry.name,
+                    "path": str(rel_path),
                     "children": children,
                 }
             )
         else:
-            items.append({"type": "file", "name": entry, "path": rel_path})
+            items.append(
+                {
+                    "type": "file",
+                    "name": entry.name,
+                    "path": str(rel_path),
+                }
+            )
+
     return items
 
 
-def build_directories_list(root_path, spec=None):
-    """
-    ディレクトリ一覧を構築。
-    """
-    directories = []
+def build_directories_list(
+    root_path: Path, spec: PathSpec | None = None
+) -> list[dict[str, Any]]:
+    directories: list[dict[str, Any]] = []
     for dirpath, dirnames, filenames in os.walk(root_path):
+        dirpath = Path(dirpath)
         if is_ignored(dirpath, spec, root_path):
             continue
 
-        rel_path = os.path.relpath(dirpath, root_path)
-        if rel_path == ".":
-            rel_path = ""
+        rel_path = dirpath.relative_to(root_path)
+        rel_str = "" if str(rel_path) == "." else str(rel_path)
 
-        children = []
+        children: list[str] = []
         for d in dirnames:
-            full_d = os.path.join(dirpath, d)
+            full_d = dirpath / d
             if not is_ignored(full_d, spec, root_path):
-                children.append(os.path.join(rel_path, d) + "/")
+                children.append(str((Path(rel_str) / d)) + "/")
 
         for f in filenames:
-            full_f = os.path.join(dirpath, f)
+            full_f = dirpath / f
             if not is_ignored(full_f, spec, root_path):
-                children.append(os.path.join(rel_path, f))
+                children.append(str((Path(rel_str) / f)))
 
         directories.append(
             {
-                "relative_path": rel_path + "/" if rel_path else "./",
+                "relative_path": rel_str + "/" if rel_str else "./",
                 "children": children,
             }
         )
@@ -124,14 +137,16 @@ def build_directories_list(root_path, spec=None):
 # ------------------------------------------------------------
 # Git 履歴の収集 (PyDriller)
 # ------------------------------------------------------------
-def extract_git_history(repo_path, branch):
+def extract_git_history(
+    repo_path: Path, branch: str
+) -> dict[str, list[dict[str, Any]]]:
     """
     PyDrillerを使って全ファイルの変更履歴を収集。
     """
-    file_histories = {}
+    file_histories: dict[str, list[dict[str, Any]]] = {}
 
     for commit in Repository(
-        path_to_repo=repo_path, only_in_branch=branch
+        path_to_repo=str(repo_path), only_in_branch=branch
     ).traverse_commits():
         for mod in getattr(
             commit, "modified_files", getattr(commit, "modifications", [])
@@ -157,9 +172,11 @@ def extract_git_history(repo_path, branch):
 # ------------------------------------------------------------
 # JSON生成メイン関数
 # ------------------------------------------------------------
-def generate_git_summary_json(repo_path, branch, output_file="git_summary.json"):
-    repo_path = os.path.abspath(repo_path)
-    root_name = os.path.basename(repo_path)
+def generate_git_summary_json(
+    repo_path: Path, branch: str, output_file: Path = Path("git_summary.json")
+) -> None:
+    repo_path = repo_path.resolve()
+    root_name = repo_path.name
 
     print(f"Analyzing repository: {root_name} (branch: {branch})")
 
@@ -170,22 +187,22 @@ def generate_git_summary_json(repo_path, branch, output_file="git_summary.json")
     else:
         print("No .gitignore found — analyzing all files.")
 
-    # 構造情報
+    # プロジェクトでぃの構造情報
     project_tree = {
         "root": {
             "name": root_name,
             "root_path": ".",
-            "structure": build_project_structure(repo_path, ".", spec),
+            "structure": build_project_structure(repo_path, Path("."), spec),
         }
     }
 
     # Git履歴収集
     git_history = extract_git_history(repo_path, branch)
 
-    files_data = []
+    files_data: list[dict[str, Any]] = []
     for rel_path, history in git_history.items():
         created_at = history[0]["author_date"] if history else None
-        file_info = {
+        file_info: dict[str, Any] = {
             "relative_path": rel_path,
             "type": "file",
             "created_at": created_at,
@@ -204,15 +221,21 @@ def generate_git_summary_json(repo_path, branch, output_file="git_summary.json")
         "directories": directories_data,
     }
 
-    with open(output_file, "w", encoding="utf-8") as f:
+    output_file.parent.mkdir(parents=True, exist_ok=True)
+    with output_file.open("w", encoding="utf-8") as f:
         json.dump(output, f, indent=4, ensure_ascii=False)
 
     print(f"JSON summary created: {output_file}")
 
 
+# ------------------------------------------------------------
+# 実行
+# ------------------------------------------------------------
 if __name__ == "__main__":
-    repo_path = r"C:\Users\roa86\Documents\roa_local\workspace\git\testapp1_practice"
-    branch = "main"
-    output = r"output\project_history.json"
+    repo_path = Path(
+        r"C:\Users\roa86\Documents\roa_local\workspace\git\testapp1_practice"
+    )  # プロジェクトのルートディレクトリ
+    branch = "main"  # 解析対象のgitブランチ名
+    output = Path(r"output\project_history.json")  # 出力ファイル(json)
 
     generate_git_summary_json(repo_path, branch, output)

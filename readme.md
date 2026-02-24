@@ -1,68 +1,81 @@
-# 🧩 Git Project History Extractor
+## 🧩 プロジェクト概要
 
-Gitリポジトリ内の **すべてのファイル変更履歴** を抽出し、
-**JSON形式** でまとめるPythonスクリプトです。
+このツールは、指定した Git リポジトリを解析し、
+以下の情報を JSON 形式で出力する Python スクリプトです。
 
-各ファイルの
+- 各ファイルのコミット履歴(メッセージ・日時・ハッシュ)
+- 各ファイルの初回コミット日時
+- ファイルの種類(拡張子からの簡易推定)
+- プロジェクト構造(フォルダ・ファイル階層)
 
-* コミット履歴（メッセージ・日時・ハッシュ）
-* 初回コミット日時（created_at）
-* 拡張子からの簡易言語判定
-* プロジェクトディレクトリ構造（再帰的）
-
-を1つのJSONにまとめ、ドキュメント生成などに再利用できます。
+出力された JSON は、ドキュメント生成などに再利用できます。
 
 ---
+
+## 🚀 主な機能
+
 
 ## 🚀 特徴
 
-* 📂 **Gitリポジトリを1回走査**して履歴を全収集
-* 🧠 **PyDriller** を利用（MITライセンス・商用利用可）
-* 🪶 **Python標準ライブラリのみ依存（＋PyDriller）**
-* 🧱 **指定ブランチ・任意ルートディレクトリ対応**
-* 🗃️ **JSON出力形式を柔軟に加工可能**
+- 📂 Gitリポジトリを1回走査して履歴を全収集
+- 🔍 `.gitignore`対応(ルートディレクトリ直下の`.gitignore`のみ対応)
+- 🧠 PyDriller を利用（MITライセンス・商用利用可）
+- 🪶 Python標準ライブラリのみ依存（＋PyDriller）
+- 🧱 指定ブランチ・任意ルートディレクトリ対応
 
 ---
 
-## 🧰 インストール
+## 🧱 依存ライブラリ
+
+このプロジェクトは以下の外部ライブラリに依存しています：
 
 ```bash
-git clone https://github.com/yourname/git-project-history-extractor.git
-cd git-project-history-extractor
-pip install -r requirements.txt
+pip install pydriller pathspec
 ```
 
-`requirements.txt` の内容：
+### 使用ライブラリ概要
 
-```
-pydriller>=2.0
-```
+| ライブラリ | 用途                    |
+| ---------- | ----------------------- |
+| PyDriller  | Git コミット履歴解析    |
+| PathSpec   | `.gitignore` ルール処理 |
 
 ---
 
 ## ⚙️ 使い方
 
-```bash
-python generate_git_summary.py <path_to_repo> [--branch BRANCH] [--output OUTPUT]
+### 1️⃣ リポジトリクローン or ローカルプロジェクト準備
+
+解析したい Git プロジェクトをローカルに用意します。
+
+### 2️⃣ スクリプトの設定
+
+`main.py` の末尾で以下を指定します：
+
+```python
+from pathlib import Path
+
+if __name__ == "__main__":
+    repo_path = Path(
+        r"C:\Users\user\Documents\workspace\project\test_app"
+    )  # プロジェクトのルートディレクトリ
+    branch = "main"  # 解析対象のgitブランチ名
+    output = Path(r"output\project_history.json")  # 出力ファイル(json)
+
+    generate_git_summary_json(repo_path, branch, output)
 ```
 
-### 例：
+### 3️⃣ 実行
 
 ```bash
-python main.py "C:\Users\roa86\Documents\roa_local\workspace\git\testapp1_practice" --branch main --output output\project_history.json
+python main.py
 ```
 
-### 引数
-
-| 引数名      | 説明                              | デフォルト値       |
-| :---------- | :-------------------------------- | :----------------- |
-| `repo_path` | Gitリポジトリのルートディレクトリ | **必須**           |
-| `--branch`  | 対象ブランチ名                    | `main`             |
-| `--output`  | 出力JSONファイル名                | `git_summary.json` |
+実行後、`output/` フォルダ内に `project_history.json` が生成されます。
 
 ---
 
-## 📄 出力されるJSON構造
+## 📄 出力されるJSON構造(例)
 
 ```json
 {
@@ -117,21 +130,11 @@ python main.py "C:\Users\roa86\Documents\roa_local\workspace\git\testapp1_practi
 
 ---
 
-## 🧩 JSONの利用例
-
-生成された `git_summary.json` は以下のような用途に使えます：
-
-* ドキュメント生成ツールの入力データ
-* 開発履歴の可視化（グラフ・タイムライン）
-* チーム内レビュー・コードベースの変遷解析
-
----
-
 ## 🧑‍💻 開発・ライセンス
 
-* 開発言語: **Python 3.9+**
-* 依存ライブラリ: **PyDriller (MIT License)**
-* 本スクリプト: **MIT License**
+- 開発言語: Python 3.9+
+- 依存ライブラリ: PyDriller (MIT License)
+- 本スクリプト: MIT License
 
 ```
 MIT License
@@ -141,25 +144,3 @@ Copyright (c) 2026
 Permission is hereby granted, free of charge, to any person obtaining a copy
 ...
 ```
-
----
-
-## 🧠 補足
-
-* 削除済みファイルはスキップされます。
-* バイナリファイルも履歴上は検出されますが、内容の解析は行いません。
-* 拡張子による言語判定は簡易的です。必要に応じて `LANGUAGE_MAP` を拡張してください。
-
----
-
-## 📜 更新履歴
-
-| 日付       | 内容         |
-| :--------- | :----------- |
-| 2026-02-24 | 初版リリース |
-
----
-
-## 💬 貢献
-
-改善案・バグ報告はぜひ [Issues](https://github.com/yourname/git-project-history-extractor/issues) へ！
